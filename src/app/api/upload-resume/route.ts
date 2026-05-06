@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 
     // 生成唯一文件名
     const timestamp = Date.now();
-    const ext = path.extname(file.name);
+    const ext = path.extname(file.name).toLowerCase();
     const fileName = `${session.user.id}_${timestamp}${ext}`;
 
     // 确保 uploads 目录存在
@@ -54,6 +54,18 @@ export async function POST(req: Request) {
     const filePath = path.join(uploadsDir, fileName);
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // 服务端魔数校验（防止 MIME 类型伪造）
+    if (ext === ".pdf" && !(buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46)) {
+      return NextResponse.json({ error: "文件内容与扩展名不匹配" }, { status: 400 });
+    }
+    if (ext === ".png" && !(buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47)) {
+      return NextResponse.json({ error: "文件内容与扩展名不匹配" }, { status: 400 });
+    }
+    if ((ext === ".jpg" || ext === ".jpeg") && !(buffer[0] === 0xFF && buffer[1] === 0xD8)) {
+      return NextResponse.json({ error: "文件内容与扩展名不匹配" }, { status: 400 });
+    }
+
     await writeFile(filePath, buffer);
 
     // 记录到数据库

@@ -8,16 +8,22 @@ interface FeedbackJson {
 
 export default async function HistoryPage() {
   const session = await auth();
+  const userId = session!.user!.id;
 
+  // 优化：使用 _count 和 select 减少数据传输
   const interviewSessions = await prisma.interviewSession.findMany({
-    where: { userId: session!.user!.id },
+    where: { userId },
     orderBy: { createdAt: "desc" },
-    include: {
-      jobPosition: true,
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      jobPosition: { select: { title: true } },
+      _count: { select: { questions: true } },
       questions: {
-        include: {
+        select: {
           answers: {
-            where: { userId: session!.user!.id },
+            where: { userId },
             select: { feedbackJson: true },
           },
         },
@@ -26,7 +32,7 @@ export default async function HistoryPage() {
   });
 
   const sessionsWithStats = interviewSessions.map((s) => {
-    const totalQuestions = s.questions.length;
+    const totalQuestions = s._count.questions;
     let answeredCount = 0;
     let scoreSum = 0;
     let scoreCount = 0;

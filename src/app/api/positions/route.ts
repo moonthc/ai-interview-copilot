@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { positionSchema } from "@/lib/validations";
 
 // GET - 列出所有岗位
 export async function GET() {
@@ -13,8 +14,13 @@ export async function GET() {
     const positions = await prisma.jobPosition.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
-      include: {
-        sessions: { select: { id: true } },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        parsedJd: true,
+        createdAt: true,
+        _count: { select: { sessions: true } },
       },
     });
 
@@ -23,7 +29,7 @@ export async function GET() {
       title: p.title,
       description: p.description,
       parsedJd: p.parsedJd,
-      sessionCount: p.sessions.length,
+      sessionCount: p._count.sessions,
       createdAt: p.createdAt,
     }));
 
@@ -42,11 +48,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const { title, description } = await req.json();
-
-    if (!title) {
-      return NextResponse.json({ error: "请输入岗位名称" }, { status: 400 });
+    const body = await req.json();
+    const parsed = positionSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
+
+    const { title, description } = parsed.data;
 
     const position = await prisma.jobPosition.create({
       data: {

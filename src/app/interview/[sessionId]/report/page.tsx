@@ -40,6 +40,12 @@ interface CategoryAverage {
   count: number;
 }
 
+interface DialogueMessage {
+  role: string;
+  content: string;
+  round: number;
+}
+
 interface QuestionDetail {
   index: number;
   category: string;
@@ -49,6 +55,8 @@ interface QuestionDetail {
   strengths: string[];
   weaknesses: string[];
   suggestion: string;
+  followUpQuestion?: string | null;
+  dialogueMessages?: DialogueMessage[];
 }
 
 interface ReportData {
@@ -228,11 +236,11 @@ export default function ReportPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-4xl mb-4 animate-spin">⚙️</div>
-          <p className="text-gray-600">AI 正在生成面试报告...</p>
-          <p className="text-sm text-gray-400 mt-2">这可能需要一些时间</p>
+          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">AI 正在生成面试报告...</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">这可能需要一些时间</p>
         </div>
       </div>
     );
@@ -573,14 +581,43 @@ export default function ReportPage({
                           </div>
                         )}
                         {q.suggestion && (
-                          <div className="bg-blue-50 p-3 rounded-lg">
-                            <h4 className="text-sm font-medium text-blue-700 mb-1">
+                          <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg">
+                            <h4 className="text-sm font-medium text-blue-700 dark:text-blue-400 mb-1">
                               💡 建议
                             </h4>
-                            <p className="text-xs text-blue-800">
+                            <p className="text-xs text-blue-800 dark:text-blue-300">
                               {q.suggestion}
                             </p>
                           </div>
+                        )}
+                        {q.followUpQuestion && (
+                          <div className="bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg">
+                            <h4 className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-1">
+                              💬 AI 追问
+                            </h4>
+                            <p className="text-xs text-amber-800 dark:text-amber-300">
+                              {q.followUpQuestion}
+                            </p>
+                          </div>
+                        )}
+                        {q.dialogueMessages && q.dialogueMessages.length > 0 && (
+                          <details className="mt-3">
+                            <summary className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-gray-100">
+                              💬 对话记录 ({q.dialogueMessages.length} 条)
+                            </summary>
+                            <div className="mt-2 space-y-2 pl-4 border-l-2 border-gray-200 dark:border-gray-700">
+                              {q.dialogueMessages.map((msg, i) => (
+                                <div key={i}>
+                                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                    {msg.role === "ai" ? "面试官" : "候选人"}
+                                  </span>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                    {msg.content}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
                         )}
                       </div>
                     </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { saveQuestionsSchema } from "@/lib/validations";
 
 export async function POST(req: Request) {
   try {
@@ -9,11 +10,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const { sessionId, questions } = await req.json();
-
-    if (!sessionId || !questions) {
-      return NextResponse.json({ error: "缺少必要参数" }, { status: 400 });
+    const body = await req.json();
+    const parsed = saveQuestionsSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
+
+    const { sessionId, questions } = parsed.data;
 
     // 验证会话属于当前用户
     const interviewSession = await prisma.interviewSession.findFirst({
@@ -35,7 +38,7 @@ export async function POST(req: Request) {
     // 保存新问题
     const savedQuestions = await Promise.all(
       questions.map(
-        (q: { id?: string; category: string; content: string }, index: number) =>
+        (q: { id?: string; category?: string; content: string }, index: number) =>
           prisma.question.create({
             data: {
               sessionId,

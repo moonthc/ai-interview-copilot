@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { positionUpdateSchema } from "@/lib/validations";
 
 // GET - 获取岗位详情
 export async function GET(
@@ -67,7 +68,13 @@ export async function PUT(
       return NextResponse.json({ error: "岗位不存在" }, { status: 404 });
     }
 
-    const { title, description } = await req.json();
+    const body = await req.json();
+    const parsed = positionUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+
+    const { title, description } = parsed.data;
 
     const updated = await prisma.jobPosition.update({
       where: { id: params.id },

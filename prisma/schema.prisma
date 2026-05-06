@@ -30,6 +30,7 @@ model Resume {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions      InterviewSession[]
 
+  @@index([userId])
   @@map("resumes")
 }
 
@@ -45,6 +46,7 @@ model JobPosition {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions    InterviewSession[]
 
+  @@index([userId])
   @@map("job_positions")
 }
 
@@ -54,6 +56,7 @@ model InterviewSession {
   resumeId       String?
   jobPositionId  String?
   status         String    @default("pending")
+  mode           String    @default("standard")
   reportJson     Json?
   createdAt      DateTime  @default(now())
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -61,31 +64,52 @@ model InterviewSession {
   jobPosition    JobPosition? @relation(fields: [jobPositionId], references: [id])
   questions      Question[]
 
+  @@index([userId])
+  @@index([resumeId])
+  @@index([jobPositionId])
   @@map("interview_sessions")
 }
 
 model Question {
-  id        String   @id @default(cuid())
-  sessionId String
-  category  String?
-  content   String
-  order     Int
-  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  answers   Answer[]
+  id               String   @id @default(cuid())
+  sessionId        String
+  category         String?
+  content          String
+  order            Int
+  session          InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  answers          Answer[]
+  dialogueMessages DialogueMessage[]
 
+  @@index([sessionId])
   @@map("questions")
 }
 
 model Answer {
-  id          String   @id @default(cuid())
-  questionId  String
-  userId      String
-  userAnswer  String   @db.Text
-  score       Int?
-  feedbackJson Json?
-  createdAt   DateTime @default(now())
-  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  questionId      String
+  userId          String
+  userAnswer      String   @db.Text
+  score           Int?
+  feedbackJson    Json?
+  followUpQuestion String? @db.Text
+  createdAt       DateTime @default(now())
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([questionId])
+  @@index([userId])
   @@map("answers")
+}
+
+model DialogueMessage {
+  id         String   @id @default(cuid())
+  questionId String
+  role       String
+  content    String   @db.Text
+  round      Int
+  createdAt  DateTime @default(now())
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("dialogue_messages")
 }

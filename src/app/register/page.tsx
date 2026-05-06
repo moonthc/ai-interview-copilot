@@ -16,9 +16,28 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; email?: string; password?: string }>({});
+
+  const validate = () => {
+    const errs: { name?: string; email?: string; password?: string } = {};
+    if (!email.trim()) {
+      errs.email = "请输入邮箱地址";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errs.email = "邮箱格式不正确";
+    }
+    if (!password) {
+      errs.password = "请输入密码";
+    } else if (password.length < 8) {
+      errs.password = "密码至少8个字符";
+    }
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (!validate()) return;
     setLoading(true);
 
     try {
@@ -176,10 +195,16 @@ export default function RegisterPage() {
                 type="email"
                 placeholder="name@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-11 rounded-xl border-gray-200 focus:border-purple-500 focus:ring-purple-500/20 transition-all"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }));
+                }}
+                className={`h-11 rounded-xl border-gray-200 focus:border-purple-500 focus:ring-purple-500/20 transition-all ${
+                  fieldErrors.email ? "border-red-400 focus:border-red-500" : ""
+                }`}
                 required
               />
+              {fieldErrors.email && <p className="text-xs text-red-500">{fieldErrors.email}</p>}
             </div>
 
             <div className="space-y-2">
@@ -187,14 +212,22 @@ export default function RegisterPage() {
               <Input
                 id="password"
                 type="password"
-                placeholder="至少 6 位字符"
+                placeholder="至少 8 位字符"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-11 rounded-xl border-gray-200 focus:border-purple-500 focus:ring-purple-500/20 transition-all"
-                minLength={6}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
+                }}
+                className={`h-11 rounded-xl border-gray-200 focus:border-purple-500 focus:ring-purple-500/20 transition-all ${
+                  fieldErrors.password ? "border-red-400 focus:border-red-500" : ""
+                }`}
                 required
               />
-              <p className="text-xs text-gray-400 mt-1">密码至少 6 位，建议包含字母和数字</p>
+              {fieldErrors.password ? (
+                <p className="text-xs text-red-500">{fieldErrors.password}</p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">密码至少 8 位，建议包含字母和数字</p>
+              )}
             </div>
 
             <Button

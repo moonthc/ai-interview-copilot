@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ai, AI_MODEL } from "@/lib/ai";
+import { extractJsonFromAIResponse } from "@/lib/ai-parse";
 
 export async function POST(
   _req: Request,
@@ -62,18 +63,7 @@ ${position.description}
     });
 
     const responseContent = completion.choices[0].message.content || "";
-    let jsonStr = responseContent.trim();
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim();
-    }
-    const jsonStart = jsonStr.indexOf("{");
-    const jsonEnd = jsonStr.lastIndexOf("}");
-    if (jsonStart !== -1 && jsonEnd !== -1) {
-      jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
-    }
-
-    const parsedJd = JSON.parse(jsonStr);
+    const parsedJd = extractJsonFromAIResponse(responseContent);
 
     await prisma.jobPosition.update({
       where: { id: params.id },

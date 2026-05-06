@@ -41,7 +41,7 @@ export function ResumeCard({ resume }: ResumeCardProps) {
       const response = await fetch("/api/delete-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeId: resume.id }),
+        body: JSON.stringify({ id: resume.id }),
       });
 
       if (!response.ok) {

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ai, AI_MODEL } from "@/lib/ai";
+import { generateQuestionsSchema } from "@/lib/validations";
+import { extractJsonFromAIResponse } from "@/lib/ai-parse";
 
 export async function POST(req: Request) {
   try {
@@ -10,11 +12,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const { resumeId, jobTitle, jobDescription } = await req.json();
-
-    if (!jobTitle) {
-      return NextResponse.json({ error: "请选择或输入岗位" }, { status: 400 });
+    const body = await req.json();
+    const parsed = generateQuestionsSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
+
+    const { resumeId, jobTitle, jobDescription, mode } = parsed.data;
 
     // 获取简历内容
     let resumeContent = "";
@@ -31,40 +35,36 @@ export async function POST(req: Request) {
     }
 
     // 构建 prompt
-    const prompt = `请为以下岗位生成10道面试问题。
+    const prompt = `请为以下岗位生成6道面试问题。
 
 岗位：${jobTitle}
 ${jobDescription ? `岗位描述：${jobDescription}` : ""}
 ${resumeContent ? `候选人简历：${resumeContent}` : ""}
 
 要求：
-1. 行为面试问题 4 道（category: "行为面试"）
-2. 技术面试问题 3 道（category: "技术面试"）
-3. 项目追问 3 道（category: "项目追问"）
+1. 行为面试问题 2 道（category: "行为面试"）
+2. 技术面试问题 2 道（category: "技术面试"）
+3. 项目追问 2 道（category: "项目追问"）
 
-必须返回一个包含10个对象的JSON数组，格式如下：
+必须返回一个包含6个对象的JSON数组，格式如下：
 [
 {"category": "行为面试", "question": "问题1"},
 {"category": "行为面试", "question": "问题2"},
-{"category": "行为面试", "question": "问题3"},
-{"category": "行为面试", "question": "问题4"},
-{"category": "技术面试", "question": "问题5"},
-{"category": "技术面试", "question": "问题6"},
-{"category": "技术面试", "question": "问题7"},
-{"category": "项目追问", "question": "问题8"},
-{"category": "项目追问", "question": "问题9"},
-{"category": "项目追问", "question": "问题10"}
+{"category": "技术面试", "question": "问题3"},
+{"category": "技术面试", "question": "问题4"},
+{"category": "项目追问", "question": "问题5"},
+{"category": "项目追问", "question": "问题6"}
 ]
 
 请直接返回JSON数组，不要有其他文字。`;
 
-    // 调用 MiMo API
+    // 调用 DeepSeek API
     const completion = await ai.chat.completions.create({
       model: AI_MODEL,
       messages: [
         {
           role: "system",
-          content: "你是一位专业的面试官，擅长生成高质量的面试问题。你必须返回一个包含10个问题的JSON数组，每个问题包含category和question字段。",
+          content: "你是一位专业的面试官，擅长生成高质量的面试问题。你必须返回一个包含6个问题的JSON数组，每个问题包含category和question字段。",
         },
         { role: "user", content: prompt },
       ],
@@ -73,39 +73,13 @@ ${resumeContent ? `候选人简历：${resumeContent}` : ""}
     });
 
     const responseContent = completion.choices[0].message.content || "";
-    console.log("MiMo 原始响应:", responseContent.substring(0, 500));
+    console.log("DeepSeek 原始响应:", responseContent.substring(0, 500));
 
     let questions: { category: string; question: string }[] = [];
 
     try {
-      // 提取 JSON 内容（可能被包裹在 markdown 代码块中）
-      let jsonStr = responseContent.trim();
-
-      // 如果是 markdown 代码块，提取其中的 JSON
-      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[1].trim();
-      }
-
-      // 清理 JSON 字符串
-      jsonStr = jsonStr.trim();
-
-      // 如果不是以 [ 开头，可能是多个对象用逗号分隔，需要包装成数组
-      if (!jsonStr.startsWith("[")) {
-        // 检查是否是多个对象用逗号分隔
-        if (jsonStr.includes("},{")) {
-          jsonStr = "[" + jsonStr + "]";
-        } else {
-          // 单个对象
-          jsonStr = "[" + jsonStr + "]";
-        }
-      }
-
-      const parsed = JSON.parse(jsonStr);
-
-      if (Array.isArray(parsed)) {
-        questions = parsed;
-      }
+      const parsedJson = extractJsonFromAIResponse<{ category: string; question: string }[] | { category: string; question: string }>(responseContent);
+      questions = Array.isArray(parsedJson) ? parsedJson : [parsedJson];
 
       console.log("解析后的问题数量:", questions.length);
     } catch (e) {
@@ -141,6 +115,7 @@ ${resumeContent ? `候选人简历：${resumeContent}` : ""}
         resumeId: resumeId || null,
         jobPositionId: jobPosition.id,
         status: "created",
+        mode: mode || "standard",
       },
     });
 

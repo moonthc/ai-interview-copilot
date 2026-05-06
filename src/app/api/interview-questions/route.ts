@@ -34,7 +34,10 @@ export async function GET(req: Request) {
       orderBy: { order: "asc" },
     });
 
-    return NextResponse.json({ questions });
+    return NextResponse.json({
+      questions,
+      mode: interviewSession.mode || "standard",
+    });
   } catch (error) {
     console.error("获取面试问题错误:", error);
     return NextResponse.json({ error: "获取问题失败" }, { status: 500 });

@@ -6,11 +6,17 @@ import { PositionCreateForm } from "@/components/position-create-form";
 export default async function PositionsPage() {
   const session = await auth();
 
+  // 优化：使用 select 避免加载 matchResult 和 questionBank 大 JSON 字段
   const positions = await prisma.jobPosition.findMany({
     where: { userId: session!.user!.id },
     orderBy: { createdAt: "desc" },
-    include: {
-      sessions: { select: { id: true } },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      parsedJd: true,
+      createdAt: true,
+      _count: { select: { sessions: true } },
     },
   });
 
@@ -23,7 +29,7 @@ export default async function PositionsPage() {
       experienceLevel?: string;
       educationRequirement?: string;
     } | null,
-    sessionCount: p.sessions.length,
+    sessionCount: p._count.sessions,
     createdAt: p.createdAt,
   }));
 

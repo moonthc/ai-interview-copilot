@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { unlink } from "fs/promises";
 import path from "path";
+import { deleteSchema } from "@/lib/validations";
 
 export async function POST(req: Request) {
   try {
@@ -11,11 +12,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const { resumeId } = await req.json();
-
-    if (!resumeId) {
-      return NextResponse.json({ error: "缺少简历 ID" }, { status: 400 });
+    const body = await req.json();
+    const parsed = deleteSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
+
+    const resumeId = parsed.data.id;
 
     // 验证简历属于当前用户
     const resume = await prisma.resume.findFirst({

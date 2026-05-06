@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ai, AI_MODEL } from "@/lib/ai";
+import { extractJsonFromAIResponse } from "@/lib/ai-parse";
 
 interface FeedbackJson {
   score: number;
@@ -115,7 +116,7 @@ export async function GET(req: Request) {
       console.log("使用缓存的 AI 报告, sessionId:", sessionId);
       aiSummary = cachedReport;
     } else {
-      // 调用 MiMo 生成综合评价
+      // 调用 DeepSeek 生成综合评价
       const questionsSummary = questions
         .map((q, index) => {
           const answer = q.answers[0];
@@ -173,21 +174,15 @@ radarData 中的 value 是 0-100 的分数，请根据候选人的实际回答�
         });
 
         const responseContent = completion.choices[0].message.content || "";
-        console.log("MiMo 报告原始响应:", responseContent.substring(0, 300));
+        console.log("DeepSeek 报告原始响应:", responseContent.substring(0, 300));
 
-        let jsonStr = responseContent.trim();
-        const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (jsonMatch) {
-          jsonStr = jsonMatch[1].trim();
-        }
-
-        const jsonStart = jsonStr.indexOf("{");
-        const jsonEnd = jsonStr.lastIndexOf("}");
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-          jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
-        }
-
-        const parsed = JSON.parse(jsonStr);
+        const parsed = extractJsonFromAIResponse<{
+          summary: string;
+          skillMatch: string;
+          communication: string;
+          recommendations: string[];
+          radarData: RadarDimension[];
+        }>(responseContent);
 
         aiSummary = {
           summary: parsed.summary || "暂无综合评价",
@@ -233,21 +228,37 @@ radarData 中的 value 是 0-100 的分数，请根据候选人的实际回答�
       }
     }
 
-    // 构建每题详情
-    const questionDetails = questions.map((q, index) => {
-      const answer = q.answers[0];
-      const feedback = answer?.feedbackJson as unknown as FeedbackJson;
-      return {
-        index: index + 1,
-        category: q.category || "未分类",
-        content: q.content,
-        userAnswer: answer?.userAnswer || null,
-        score: feedback?.score || 0,
-        strengths: feedback?.strengths || [],
-        weaknesses: feedback?.weaknesses || [],
-        suggestion: feedback?.suggestion || "",
-      };
-    });
+    // 构建每题详情（包含追问和对话记录）
+    const isDialogueMode = interviewSession.mode === "dialogue";
+    const questionDetails = await Promise.all(
+      questions.map(async (q, index) => {
+        const answer = q.answers[0];
+        const feedback = answer?.feedbackJson as unknown as FeedbackJson;
+
+        let dialogueMessages: { role: string; content: string; round: number }[] = [];
+        if (isDialogueMode) {
+          const messages = await prisma.dialogueMessage.findMany({
+            where: { questionId: q.id },
+            orderBy: { round: "asc" },
+            select: { role: true, content: true, round: true },
+          });
+          dialogueMessages = messages;
+        }
+
+        return {
+          index: index + 1,
+          category: q.category || "未分类",
+          content: q.content,
+          userAnswer: answer?.userAnswer || null,
+          score: feedback?.score || 0,
+          strengths: feedback?.strengths || [],
+          weaknesses: feedback?.weaknesses || [],
+          suggestion: feedback?.suggestion || "",
+          followUpQuestion: (answer as { followUpQuestion?: string })?.followUpQuestion || null,
+          dialogueMessages,
+        };
+      })
+    );
 
     return NextResponse.json({
       session: {
